@@ -1,0 +1,280 @@
+#pragma config(I2C_Usage, I2C1, i2cSensors)
+#pragma config(Sensor, in7,    InfraCollector, sensorAnalog)
+#pragma config(Sensor, dgtl1,  button1,        sensorTouch)
+#pragma config(Sensor, dgtl2,  button2,        sensorTouch)
+#pragma config(Sensor, dgtl4,  SonarSensor,    sensorSONAR_cm)
+#pragma config(Sensor, dgtl7,  left_bumper,    sensorTouch)
+#pragma config(Sensor, dgtl8,  right_bumper,   sensorTouch)
+#pragma config(Sensor, dgtl11, LED_1,          sensorDigitalOut)
+#pragma config(Sensor, dgtl12, arm_sensor,     sensorTouch)
+#pragma config(Sensor, I2C_1,  ,               sensorQuadEncoderOnI2CPort,    , AutoAssign )
+#pragma config(Sensor, I2C_2,  ,               sensorQuadEncoderOnI2CPort,    , AutoAssign )
+#pragma config(Motor,  port1,           left_motor,    tmotorVex393_HBridge, openLoop, encoderPort, I2C_1)
+#pragma config(Motor,  port2,           right_motor,   tmotorVex393_MC29, openLoop, encoderPort, I2C_2)
+#pragma config(Motor,  port3,           arm_motor,     tmotorVex393_MC29, openLoop)
+
+
+enum T_system_state
+{
+  STATE1 = 1,   // Replace names with something more descriptive in in your project code.
+  STATE2 = 2,
+  STATE3 = 3,
+  STATE4 = 4,
+  STATE5
+};
+/*
+2m: 
+1m:
+0.5m: 65 - 95, distance 40 - 60
+Placement distance: 
+
+
+*/
+
+// Phototransistor value will drop below 160 when IR light is detected across the arena
+const int ir_threshold_2m = 160;
+const int ir_threshold_1m = 110;
+const int ir_threshold_halfm = 95;
+
+// Control light with off/on constants
+const int off = 0;
+const int on = 1;
+
+//Useful functions for main programs:
+
+//resets red LED to off
+void reset_LED_1(){
+  	SensorValue(LED_1) = off;
+}
+
+//turns on wheel motors so robot goes straight
+void go_straight(){
+	motor[left_motor] = -43;
+	motor[right_motor] = 33;
+}
+
+void backup(){
+	motor[left_motor] = 43;
+	motor[right_motor] = -33;
+}
+
+//stops robot
+void stop_robot(){
+	motor[right_motor] = 0;
+	motor[left_motor] = 0;
+}
+
+void right_hit(){
+	if(SensorValue(right_bumper) == 1){
+		backup();
+		wait1Msec(1000);
+		motor[right_motor] = 40;
+		motor[left_motor] = 48;
+		wait1Msec(1000);
+		go_straight();
+		wait1Msec(1000);
+	}
+}
+
+void left_hit(){
+	if(SensorValue(left_bumper) == 1){
+		backup();
+		wait1Msec(1000);
+		motor[right_motor] = -40;
+		motor[left_motor] = -48;
+		wait1Msec(1000);
+		go_straight();
+		wait1Msec(1000);
+	}
+}
+
+void turn_left(){
+		motor[right_motor] = 40;
+		motor[left_motor] = 48;
+}
+
+void turn_right(){
+		motor[right_motor] = -40;
+		motor[left_motor] = -48;
+}
+
+void slow_left(){
+		motor[right_motor] = 30;
+		motor[left_motor] = 38;
+}
+
+void slow_right(){
+		motor[right_motor] = -30;
+		motor[left_motor] = -38;
+}
+
+int sensor_min(){
+	int values[4];
+	for(int i = 0; i < 4; i++){
+		values[i] = SensorValue(InfraCollector);
+		wait1Msec(50);
+	}
+	int min = values[0];
+	for(int i = 1; i < 4; i++){
+		if(values[i] < min){
+			min = values[i];	
+		}
+	}
+	return min;
+}
+
+void target_detection(){
+	while(true){
+		int ir_value = sensor_min();
+		while(true){
+			turn_left();
+			wait1Msec(200);
+			stop_robot();
+			if(sensor_min() > ir_value){
+				turn_right();
+				wait1Msec(200);
+				stop_robot();
+				break;
+			}else{
+				ir_value = sensor_min();
+			}
+		}//while true left
+		while(true){
+			turn_right();
+			wait1Msec(200);
+			stop_robot();
+			if(sensor_min() > ir_value){
+				turn_left();
+				wait1Msec(200);
+				stop_robot();
+				break;
+			}else{
+				ir_value = sensor_min();
+			}
+		}//while true right
+		if(SensorValue(SonarSensor) > 60){
+			while(SensorValue(SonarSensor) > 60){
+				go_straight();
+			}
+			stop_robot();
+			continue;
+		}
+		if(SensorValue(SonarSensor) > 30){
+			while(SensorValue(SonarSensor) > 30){
+				go_straight();	
+			}
+			stop_robot();
+			continue;
+		}
+		if(SensorValue(SonarSensor) > 15){
+			while(SensorValue(SonarSensor) > 15){
+				go_straight();	
+			}
+			stop_robot();
+			continue;
+		}
+		if(SensorValue(SonarSensor) <= 15){
+			while(SensorValue(SonarSensor) > 10){
+				go_straight();
+			}
+			break;
+		}
+	}//while true 
+}
+
+void place_object(){
+	while(true){
+		while(SensorValue(arm_sensor) == 0){
+			motor[arm_motor] = 25;
+		}
+		motor[arm_motor] = 0;
+		wait1Msec(1000);
+		motor[arm_motor] = -18;
+		wait1Msec(2000);
+		motor[arm_motor] = -25;
+		wait1Msec(1000);
+		motor[arm_motor] = 0;
+		break;
+	}
+}
+
+void final_positioning(){
+	backup();
+	wait1Msec(500);
+	turn_right();
+	wait1Msec(1350);
+
+	while(true){
+		go_straight();
+		if(SensorValue(right_bumper) == 1){
+			stop_robot();
+			backup();
+			wait1Msec(400);
+			slow_right();
+			wait1Msec(270);
+		}
+		if(SensorValue(left_bumper) == 1){
+			stop_robot();
+			backup();
+			wait1Msec(400);
+			slow_left();
+			wait1Msec(270);
+		}
+		if(SensorValue(SonarSensor) < 9){
+			stop_robot();
+			break;
+		}
+	}//while true
+}//function
+
+
+task main()
+{
+	reset_LED_1();
+
+  // System state variable
+  T_system_state system_state;
+
+	// Initialize system state
+  system_state = STATE1;
+
+  while(SensorValue(button1) != 1){
+  	stop_robot();
+  }
+
+	while(true){
+		switch(system_state){
+			case(STATE1):
+				target_detection();
+				if(SensorValue(SonarSensor) < 15){
+					system_state = STATE2;	
+				}
+				break;
+
+			/*case(STATE2):
+				find_center();
+				if(SensorValue(SonarSensor) <= 20){
+					system_state = STATE3;
+				}
+				break;
+			*/
+			case(STATE2):
+				place_object();
+				system_state = STATE3;
+				break;
+
+			case(STATE3):
+				final_positioning();
+				if(SensorValue(SonarSensor) <= 15){
+					system_state = STATE4;
+				}
+				break;
+
+			case(STATE4):
+				//signal task completion
+				SensorValue(LED_1) = on;
+
+			default:
+		}//switch statement
+	}//while true
+}
